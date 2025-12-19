@@ -174,8 +174,8 @@ def create_dataloaders(train_df, val_df, test_df,
 
 # Example usage
 if __name__ == "__main__":
-    from preprocess_text import TextPreprocessor
-    from preprocess_image import ImagePreprocessor
+    from text_preprocess import TextPreprocessor
+    from image_preprocess import ImagePreprocessor
     
     # Initialize preprocessors
     text_prep = TextPreprocessor()

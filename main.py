@@ -17,17 +17,20 @@ import argparse
 from pathlib import Path
 
 # Import custom modules
+# Import base modules
 from data_pipeline.text_preprocess import TextPreprocessor
-from data_pipeline.image_preprocess import ImagePreprocessor
-from data_pipeline.dataset import create_dataloaders
 from models.baseline_ml import BaselineModels
 from models.text_encoder import TextClassifier
-from models.image_encoder import ImageClassifier
-from models.multimodal_classifier import MultimodalClassifier
 from training.train_pytorch import Trainer, evaluate_model
-from active_learning.sampler import ActiveLearningSampler, ActiveLearningLoop
 from utils.metrics import calculate_metrics, print_metrics, plot_confusion_matrix
 from utils.visualization import plot_training_history, plot_active_learning_progress
+
+# Conditional imports based on model type (imported later in main function)
+# from data_pipeline.image_preprocess import ImagePreprocessor
+# from data_pipeline.dataset import create_dataloaders
+# from models.image_encoder import ImageClassifier
+# from models.multimodal_classifier import MultimodalClassifier
+# from active_learning.sampler import ActiveLearningSampler, ActiveLearningLoop
 
 def setup_directories():
     """Create necessary directories"""
@@ -101,11 +104,30 @@ def main():
     
     # Text preprocessing
     text_prep = TextPreprocessor(max_length=128)
-    df_processed = text_prep.process_dataframe(
-        df,
-        text_column=args.text_column,
-        label_column=args.label_column
-    )
+    
+    # Check if data is already processed (has 'text' column)
+    if 'text' in df.columns and 'category' in df.columns:
+        print("Data already preprocessed, using as-is...")
+        df_processed = df.copy()
+        
+        # Just clean the text
+        print("Cleaning text data...")
+        df_processed['text'] = df_processed['text'].apply(text_prep.clean_text)
+        
+        # Encode labels
+        df_processed['label'] = pd.Categorical(df_processed['category']).codes
+        text_prep.label_map = dict(enumerate(df_processed['category'].astype('category').cat.categories))
+        text_prep.num_classes = len(text_prep.label_map)
+        
+        # Remove empty texts
+        df_processed = df_processed[df_processed['text'].str.len() > 0].copy()
+    else:
+        # Use original preprocessing
+        df_processed = text_prep.process_dataframe(
+            df,
+            text_column=args.text_column,
+            label_column=args.label_column
+        )
     
     # Create splits
     train_df, val_df, test_df = text_prep.create_splits(df_processed)
@@ -113,6 +135,8 @@ def main():
     # Image preprocessing (if using images)
     image_prep = None
     if args.model_type in ['image', 'multimodal'] and args.image_dir:
+        from data_pipeline.image_preprocess import ImagePreprocessor
+        
         print("\nProcessing images...")
         image_prep = ImagePreprocessor(image_size=224)
         train_df = image_prep.create_image_paths_column(train_df, args.image_dir)
@@ -151,6 +175,9 @@ def main():
     print(f"STEP 3: DEEP LEARNING MODEL ({args.model_type.upper()})")
     print("="*70)
     
+    # Import dataset module
+    from data_pipeline.dataset import create_dataloaders
+    
     # Create dataloaders
     use_multimodal = args.model_type == 'multimodal'
     train_loader, val_loader, test_loader = create_dataloaders(
@@ -169,11 +196,13 @@ def main():
             model_name=args.text_model
         )
     elif args.model_type == 'image':
+        from models.image_encoder import ImageClassifier
         model = ImageClassifier(
             num_classes=num_classes,
             model_name=args.image_model
         )
     else:  # multimodal
+        from models.multimodal_classifier import MultimodalClassifier
         model = MultimodalClassifier(
             num_classes=num_classes,
             text_model=args.text_model,
@@ -229,6 +258,8 @@ def main():
     
     # ========== STEP 5: Active Learning (Optional) ==========
     if args.use_active_learning:
+        from active_learning.sampler import ActiveLearningSampler, ActiveLearningLoop
+        
         print("\n" + "="*70)
         print("STEP 5: ACTIVE LEARNING")
         print("="*70)

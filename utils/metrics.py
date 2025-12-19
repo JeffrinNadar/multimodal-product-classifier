@@ -106,10 +106,14 @@ def plot_confusion_matrix(y_true, y_pred, labels=None,
     plt.figure(figsize=figsize)
     
     # For large number of classes, show heatmap without annotations
-    if len(np.unique(y_true)) > 20:
+    n_classes = len(np.unique(y_true))
+    if n_classes > 20:
         sns.heatmap(cm, cmap='Blues', cbar=True, 
                    xticklabels=False, yticklabels=False)
     else:
+        # Generate labels if not provided
+        if labels is None:
+            labels = [f'Class {i}' for i in range(n_classes)]
         sns.heatmap(cm, annot=True, fmt=fmt, cmap='Blues', 
                    xticklabels=labels, yticklabels=labels)
     
