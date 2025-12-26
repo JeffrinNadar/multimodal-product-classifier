@@ -50,17 +50,18 @@ virtualenv/
 # Data files (IMPORTANT for ML projects)
 data/raw/*.parquet
 data/raw/*.csv
-data/raw/*.json
+data/*.json
 data/raw/*.txt
-data/processed/*.parquet
-data/processed/*.csv
-data/processed/*.pkl
-data/processed/*.pt
-data/processed/*.npy
+data/*.parquet
+data/*.csv
+data/*.pkl
+data/*.pt
+data/*.npy
+data/
 
 # Keep the directory structure but not the files
-!data/raw/.gitkeep
-!data/processed/.gitkeep
+!data/.gitkeep
+!data/.gitkeep
 
 # Model checkpoints and weights
 models/checkpoints/
@@ -140,3 +141,4 @@ experiments/
 notes.txt
 TODO.txt
 scratch.py
+image_test.py

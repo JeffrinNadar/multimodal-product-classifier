@@ -107,6 +107,15 @@ class TextPreprocessor:
         print("Creating stratified splits...")
         
         # First split: train+val vs test
+        # Added code to filter out rare categories
+        category_counts = df['category'].value_counts()
+        valid_categories = category_counts[category_counts >= 2].index
+
+        df = df[df['category'].isin(valid_categories)].reset_index(drop=True)
+
+        removed = set(category_counts.index) - set(valid_categories)
+        print(f"Removed {len(removed)} rare categories: {removed}")
+        #### End of added code
         train_val, test = train_test_split(
             df, 
             test_size=test_size, 

@@ -11,6 +11,10 @@ import pandas as pd
 import requests
 from pathlib import Path
 from tqdm import tqdm
+import requests
+from PIL import Image
+from io import BytesIO
+import ast
 
 # Direct download URLs from UCSD
 BASE_URL = "https://datarepo.eng.ucsd.edu/mcauley_group/data/amazon_2023/raw"
@@ -59,6 +63,7 @@ def read_jsonl_gz(file_path, sample_size=None):
             except:
                 continue
     return data
+
 
 def download_amazon_dataset(category='All_Beauty', sample_size=10000, output_dir='data'):
     """
@@ -138,6 +143,8 @@ def download_amazon_dataset(category='All_Beauty', sample_size=10000, output_dir
     print(f"\n[4/4] Parsing metadata...")
     meta_data = read_jsonl_gz(meta_file, sample_size=None)  # Load all metadata
     meta_df = pd.DataFrame(meta_data)
+    print("Metadata columns:")
+    print(meta_df.columns.tolist())
     print(f"✓ Loaded {len(meta_df):,} products")
     
     # Step 5: Process and combine
@@ -155,10 +162,29 @@ def download_amazon_dataset(category='All_Beauty', sample_size=10000, output_dir
         lambda x: ' '.join(x) if isinstance(x, list) else str(x) if pd.notna(x) else ''
     )
     meta_df['category'] = meta_df['main_category'].fillna('Unknown')
-    
+
+    def extract_image_url(images):
+        """
+        images: list of dicts, each dict may have keys like 'hi_res', 'large', 'thumb'
+        Returns the first valid URL it finds, preferring hi_res > large > thumb
+        """
+        if not isinstance(images, list):
+            return None
+
+        for img_dict in images:
+            if not isinstance(img_dict, dict):
+                continue
+            for key in ["hi_res", "large", "thumb"]:
+                url = img_dict.get(key)
+                if isinstance(url, str) and url.startswith("http"):
+                    return url
+        return None
+
+    meta_df["image_url"] = meta_df["images"].apply(extract_image_url)
+
     # Merge
     df = reviews_df.merge(
-        meta_df[['parent_asin', 'product_title', 'product_description', 'category']],
+        meta_df[['parent_asin', 'product_title', 'product_description', 'category', 'image_url']],
         on='parent_asin',
         how='inner'
     )
@@ -173,7 +199,7 @@ def download_amazon_dataset(category='All_Beauty', sample_size=10000, output_dir
     ).str.strip()
     
     # Keep only needed columns
-    df = df[['text', 'category', 'parent_asin', 'rating']].copy()
+    df = df[['text', 'category', 'parent_asin', 'rating', 'image_url']].copy()
     
     # Remove empty texts
     df = df[df['text'].str.len() > 10].copy()
@@ -189,6 +215,17 @@ def download_amazon_dataset(category='All_Beauty', sample_size=10000, output_dir
     
     # Save dataset
     output_path = f"{output_dir}/amazon_{category}_processed.csv"
+
+    non_null_images = df["image_url"].notna().sum()
+    print("\n[Image sanity check]")
+    print("Non-null image URLs:", non_null_images)
+    print(df["image_url"].head(5))
+    if non_null_images == 0:
+        raise RuntimeError(
+            "No image URLs found. Metadata parsing failed — aborting image download."
+        )
+    df = download_images(df, image_dir=f"{output_dir}/images")
+
     df.to_csv(output_path, index=False)
     print(f"\n✓ Dataset saved to: {output_path}")
     
@@ -208,6 +245,36 @@ def download_amazon_dataset(category='All_Beauty', sample_size=10000, output_dir
     print()
     
     return output_path
+
+def download_images(df, image_dir, max_images=None):
+    image_dir = Path(image_dir)
+    image_dir.mkdir(parents=True, exist_ok=True)
+
+    image_paths = []
+
+    for _, row in tqdm(df.iterrows(), total=len(df), desc="Downloading images"):
+        url = row['image_url']
+        asin = row['parent_asin']
+
+        if pd.isna(url):
+            image_paths.append(None)
+            continue
+
+        out_path = image_dir / f"{asin}.jpg"
+
+        if not out_path.exists():
+            try:
+                r = requests.get(url, timeout=10)
+                img = Image.open(BytesIO(r.content)).convert("RGB")
+                img.save(out_path)
+            except Exception:
+                image_paths.append(None)
+                continue
+
+        image_paths.append(str(out_path))
+
+    df['image_path'] = image_paths
+    return df
 
 
 if __name__ == "__main__":
