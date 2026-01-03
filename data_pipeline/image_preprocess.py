@@ -58,6 +58,22 @@ class ImagePreprocessor:
         Returns:
             PIL Image or None if invalid
         """
+        # Guard against missing / NaN image paths
+        try:
+            import pandas as _pd
+        except Exception:
+            _pd = None
+
+        if image_path is None:
+            return None
+
+        if _pd is not None and _pd.isna(image_path):
+            return None
+
+        if isinstance(image_path, float):
+            # float values (e.g., nan) are invalid paths
+            return None
+
         try:
             img = Image.open(image_path).convert('RGB')
             return img
@@ -76,6 +92,7 @@ class ImagePreprocessor:
         Returns:
             Transformed image tensor or None
         """
+        # Load image safely; load_image returns None for invalid/missing paths
         img = self.load_image(image_path)
         if img is None:
             return None
@@ -102,6 +119,15 @@ class ImagePreprocessor:
 
         for idx, row in tqdm(df.iterrows(), total=len(df)):
             image_id = row[image_column]
+            # Skip missing image ids
+            try:
+                import pandas as _pd
+            except Exception:
+                _pd = None
+
+            if image_id is None or (_pd is not None and _pd.isna(image_id)):
+                continue
+
             image_path = os.path.join(image_dir, f"{image_id}{ext}")
 
             if os.path.exists(image_path):

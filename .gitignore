@@ -136,6 +136,7 @@ transformers_cache/
 results/
 outputs/
 experiments/
+figures/
 
 # Personal notes
 notes.txt

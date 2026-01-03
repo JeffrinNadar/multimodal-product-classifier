@@ -15,6 +15,7 @@ import numpy as np
 import os
 import argparse
 from pathlib import Path
+from sklearn.utils.class_weight import compute_class_weight
 
 # Import custom modules
 # Import base modules
@@ -24,6 +25,9 @@ from models.text_encoder import TextClassifier
 from training.train_pytorch import Trainer, evaluate_model
 from utils.metrics import calculate_metrics, print_metrics, plot_confusion_matrix
 from utils.visualization import plot_training_history, plot_active_learning_progress
+from data_pipeline.image_preprocess import ImagePreprocessor
+from models.image_encoder import ImageClassifier
+from models.multimodal_classifier import MultimodalClassifier
 
 # Conditional imports based on model type (imported later in main function)
 # from data_pipeline.image_preprocess import ImagePreprocessor
@@ -57,7 +61,7 @@ def parse_args():
     # Training arguments
     parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--num_epochs', type=int, default=10)
-    parser.add_argument('--learning_rate', type=float, default=2e-5)
+    parser.add_argument('--learning_rate', type=float, default=2e-5) # 2e-5
     parser.add_argument('--patience', type=int, default=3)
     
     # Active learning arguments
@@ -70,6 +74,7 @@ def parse_args():
     # Other
     parser.add_argument('--run_baseline', action='store_true', help='Run baseline ML models')
     parser.add_argument('--seed', type=int, default=42)
+    parser.add_argument('--exp_name', type=str, default='', help='Experiment name suffix for logs and outputs')
     
     return parser.parse_args()
 
@@ -134,19 +139,20 @@ def main():
     
     # Image preprocessing (if using images)
     image_prep = None
-    if args.model_type in ['image', 'multimodal'] and args.image_dir:
+    if args.model_type in ['image', 'multimodal']:
         from data_pipeline.image_preprocess import ImagePreprocessor
-        
-        print("\nProcessing images...")
         image_prep = ImagePreprocessor(image_size=224)
-        train_df = image_prep.create_image_paths_column(train_df, args.image_dir)
-        val_df = image_prep.create_image_paths_column(val_df, args.image_dir)
-        test_df = image_prep.create_image_paths_column(test_df, args.image_dir)
-        
-        # Verify images
-        train_df = image_prep.verify_images(train_df, args.image_dir)
-        val_df = image_prep.verify_images(val_df, args.image_dir)
-        test_df = image_prep.verify_images(test_df, args.image_dir)
+        if args.image_dir:
+            print("\nProcessing images...")
+            image_prep = ImagePreprocessor(image_size=224)
+            train_df = image_prep.create_image_paths_column(train_df, args.image_dir)
+            val_df = image_prep.create_image_paths_column(val_df, args.image_dir)
+            test_df = image_prep.create_image_paths_column(test_df, args.image_dir)
+            
+            # Verify images
+            train_df = image_prep.verify_images(train_df, args.image_dir)
+            val_df = image_prep.verify_images(val_df, args.image_dir)
+            test_df = image_prep.verify_images(test_df, args.image_dir)
     
     num_classes = text_prep.num_classes
     print(f"\nNumber of classes: {num_classes}")
@@ -212,19 +218,34 @@ def main():
     print(f"Model created with {sum(p.numel() for p in model.parameters()):,} parameters")
     
     # Train model
+    # Compute class weights from training labels to handle imbalance
+    try:
+        train_labels = train_df['label'].to_numpy()
+        classes_present = np.unique(train_labels)
+        cw = compute_class_weight('balanced', classes=classes_present, y=train_labels)
+        weights = np.ones(text_prep.num_classes, dtype=np.float32)
+        for i, c in enumerate(classes_present):
+            weights[int(c)] = float(cw[i])
+    except Exception:
+        weights = None
+
     trainer = Trainer(
         model, train_loader, val_loader,
         device=device,
         learning_rate=args.learning_rate,
         num_epochs=args.num_epochs,
         patience=args.patience,
-        log_dir=f'logs/{args.model_type}_experiment'
+        log_dir=(f'logs/{args.model_type}_{args.exp_name}' if args.exp_name else f'logs/{args.model_type}_experiment'),
+        class_weights=weights
     )
     
     history = trainer.train()
     
     # Plot training history
-    plot_training_history(history, save_path=f'figures/{args.model_type}_training_history.png')
+    history_fig = f'figures/{args.model_type}_training_history'
+    history_fig += f'_{args.exp_name}' if args.exp_name else ''
+    history_fig += '.png'
+    plot_training_history(history, save_path=history_fig)
     
     # ========== STEP 4: Evaluation ==========
     print("\n" + "="*70)
@@ -245,16 +266,22 @@ def main():
     print_metrics(metrics, f"{args.model_type.upper()} Model - Test Set")
     
     # Plot confusion matrix
+    cm_path = f'figures/{args.model_type}_confusion_matrix'
+    cm_path += f'_{args.exp_name}' if args.exp_name else ''
+    cm_path += '.png'
     plot_confusion_matrix(
         test_results['labels'],
         test_results['predictions'],
         normalize=True,
-        save_path=f'figures/{args.model_type}_confusion_matrix.png'
+        save_path=cm_path
     )
     
     # Save model
-    torch.save(model.state_dict(), f'models_saved/{args.model_type}_final.pt')
-    print(f"\nModel saved to models_saved/{args.model_type}_final.pt")
+    model_path = f'models_saved/{args.model_type}_final'
+    model_path += f'_{args.exp_name}' if args.exp_name else ''
+    model_path += '.pt'
+    torch.save(model.state_dict(), model_path)
+    print(f"\nModel saved to {model_path}")
     
     # ========== STEP 5: Active Learning (Optional) ==========
     if args.use_active_learning:
@@ -303,7 +330,8 @@ def main():
     print("  - figures/")
     print("  - logs/ (TensorBoard)")
     print("\nTo view TensorBoard logs, run:")
-    print(f"  tensorboard --logdir=logs/{args.model_type}_experiment")
+    tb_dir = f'logs/{args.model_type}_{args.exp_name}' if args.exp_name else f'logs/{args.model_type}_experiment'
+    print(f"  tensorboard --logdir={tb_dir}")
 
 if __name__ == "__main__":
     main()

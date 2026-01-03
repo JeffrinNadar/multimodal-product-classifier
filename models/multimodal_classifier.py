@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
-from text_encoder import TextEncoder
-from image_encoder import ImageEncoder
+from .text_encoder import TextEncoder
+from .image_encoder import ImageEncoder
 
 class MultimodalClassifier(nn.Module):
     """

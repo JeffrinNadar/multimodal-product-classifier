@@ -15,7 +15,7 @@ class Trainer:
     def __init__(self, model, train_loader, val_loader, 
                  device='cuda', learning_rate=2e-5,
                  num_epochs=10, patience=3,
-                 log_dir='runs/experiment'):
+                 log_dir='runs/experiment', class_weights=None):
         """
         Args:
             model: PyTorch model to train
@@ -34,8 +34,15 @@ class Trainer:
         self.num_epochs = num_epochs
         self.patience = patience
         
-        # Loss and optimizer
-        self.criterion = nn.CrossEntropyLoss()
+        # Loss (optionally with class weights) and optimizer
+        if class_weights is not None:
+            try:
+                weight_tensor = torch.tensor(class_weights, dtype=torch.float).to(device)
+            except Exception:
+                weight_tensor = torch.tensor(class_weights, dtype=torch.float)
+            self.criterion = nn.CrossEntropyLoss(weight=weight_tensor)
+        else:
+            self.criterion = nn.CrossEntropyLoss()
         self.optimizer = optim.AdamW(
             model.parameters(),
             lr=learning_rate,
