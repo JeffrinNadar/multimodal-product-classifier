@@ -4,7 +4,7 @@ A production-ready machine learning system that classifies products using both t
 
 ## 🎯 Project Overview
 
-This project implements a multimodal deep learning classifier trained on the Amazon Products dataset (3M+ samples), combining CNN-based image embeddings with transformer-based text embeddings to classify items into 500+ categories.
+This project implements a multimodal deep learning classifier trained on the Amazon Products dataset (10,000+ samples), combining CNN-based image embeddings with transformer-based text embeddings to classify items into 10+ categories.
 
 **Key Features:**
 - Multimodal architecture (text + images)
