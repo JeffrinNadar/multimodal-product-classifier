@@ -1,6 +1,6 @@
 # Large-Scale Multimodal Product Classifier 
 
-A production-ready machine learning system that classifies products using both text and image data, featuring active learning to optimize labeling efficiency.
+A production-ready machine learning system that classifies products using both text and image data.
 
 ## 🎯 Project Overview
 
@@ -9,7 +9,6 @@ This project implements a multimodal deep learning classifier trained on the Ama
 **Key Features:**
 - Multimodal architecture (text + images)
 - Multiple ML approaches (classical → deep learning)
-- Active learning loop for efficient training
 - Comprehensive experiment tracking
 - Framework comparison (PyTorch, TensorFlow, scikit-learn)
 
@@ -33,11 +32,6 @@ This project implements a multimodal deep learning classifier trained on the Ama
 - **Text Encoder**: DistilBERT (768-d embeddings)
 - **Image Encoder**: ResNet50 (2048-d embeddings)
 - **Fusion Model**: Concatenated multimodal MLP
-
-#### 3. Active Learning
-- Uncertainty sampling (entropy-based)
-- Iterative retraining pipeline
-- 40% reduction in labeling cost
 
 
 ## AI-Assisted Development
