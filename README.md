@@ -1,4 +1,4 @@
-# Large-Scale Multimodal Product Classifier with Active Learning
+# Large-Scale Multimodal Product Classifier 
 
 A production-ready machine learning system that classifies products using both text and image data, featuring active learning to optimize labeling efficiency.
 
